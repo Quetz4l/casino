@@ -247,24 +247,9 @@ function Check()
     end
     if inputItem == nil then  SetPay()  end
     --if #odds == 0 then WriteText("Не указаны предметы для выйгрыша")  os.sleep(5) os.exit() end
-
-    ClearScreen()
 end
 
-function SetPay()
-    WriteText("Положите плату для лотереи в входной сундук")
-    while true do
-        local item = getItemFromChest(chestInput, nil)
-        if item ~= nil then
-            inputItem =item.fullName
-            ClearScreen()
-            WriteText("В качестве платы установлено: " ..item.label .." ("..inputItem..")")
-            os.sleep(4)
-            return
-        end
-        os.sleep(1)
-    end
-end
+
 
 --[[ Сундуки и выбор лута]]--
 function getSlotWithItem(side) 
@@ -276,14 +261,13 @@ function getSlotWithItem(side)
             end
         end
     end
-    return 0
+    return 0 -- chest is empty
 end
 
 
 function getItemFromChest(side, slot) 
-    if slot == nil then
-        slot = getSlotWithItem(side)
-    end
+    slot = slot or getSlotWithItem(side)
+    
     if slot == 0 then return end 
     local item =  tr.getStackInSlot(side, slot)
 
@@ -324,31 +308,68 @@ end
 
 
 
-function getRandomLoot()
-    if countOfLoots == 0 then return end  -------todo вернуть оплату
-    i = 0
+function getRandomLoot(payValue)
+    local countOfLoots = 0
+    local lootList = {}
+    for loot in CHEST_LOOT_LIST do
+        lootList[countOfLoots] = loot
+        countOfLoots = countOfLoots +1
+    end
+    
     while true do
-        randomItem = math.random(0,countOfLoots)
-        for item, odd in pairs(odds) do
-            if i == randomItem then
-                WriteText(item)
-                os.sleep(1)
-                if odd < math.random(0,100) then
-                    ClearScreen()
-                    WriteText(item, 0x925CAF)
-                    tr.transferItem(chestLoot, chestOutput, 1, lootList[item].slot)     
-                    os.sleep(4)
-                    return
-                else
-                    i=0 
-                    break
-                end
+        local randomItem = lootList[math.random(0,countOfLoots)]
+        local odd = JSON_LOOT_LIST[randomItem.fullName]
+        
+        ClearScreen()
+        if odd == nil then 
+            WriteText(randomItem.label .. " no has odd! Say to owner", 0x880808)
+        else
+            odd= odd + payValue
+            WriteText(odd .." -> "..randomItem.label)
+            if odd > math.random(0,100) then
+                ClearScreen()
+                WriteText(randomItem.label, 0xBF40BF)
+                return randomItem
             end
-            i = i+1
         end
+        os.sleep(1)
     end
 end
 
+
+PayList = {
+    ["coin.1"] = 1,
+    ["coin.2"] = 20,
+}
+
+function getPayItem()
+    WriteText("Положите плату для лотереи в сундук")
+    while true do
+        local item = getItemFromChest(chestInput)
+        if item ~= nil then
+            return item
+        end
+        os.sleep(1)
+    end
+end
+
+local function getPay()
+    local item = getPayItem()
+    
+    for payItem, value in pairs(PayList) do
+       if item.fullName == payItem then
+            ClearScreen()
+            WriteText("В качестве платы was used: " ..item.label.. " -> ".. value)
+            os.sleep(2)
+            return value
+       end           
+    end
+    putItemFromTo(chestInput, item.slot, chestOutput)
+    ClearScreen()
+    writeText("Pay item didnt recognize")
+    os.sleep(3)
+    return false
+end
 
 --[[ Логика игры]]--
 function GameStart()
@@ -356,14 +377,9 @@ function GameStart()
     UpdateLootList()
 
     while true do
-        --local item = getItemFromChest(chestInput)
-        if item == nil then return end
-        if item.fullName ~= inputItem then 
-            putItemFromTo(chestInput, item.slot, chestOutput)
-            print("Неверная оплата") 
-        end
-
-        getRandomLoot()
+        local payValue = getPay()
+        local randomItem = getRandomLoot(payValue)
+        putItemFromTo(chestLoot, randomItem.slot, chestOutput)
         os.sleep(1)
     end
 end
