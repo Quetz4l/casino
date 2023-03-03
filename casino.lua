@@ -5,65 +5,72 @@ local sides = require("sides")
 local serialization = require("serialization")
 local term = require("term")
 local gpu = component.gpu
-local screenWidth, screenHeight = gpu.getResolution()
-local yCenter = screenHeight / 2
-local xCenter = screenWidth / 2
-local countOfMenuButtons
-local selectedItem = 1
-local writeLine = 1
+
 local JSON_LOOT_LIST={}
 local CHEST_LOOT_LIST={}
 local LOOT_LIST = {}
-local STAY_MENU= true
 local Tick = 20
-local tr = component.proxy("91003801-3b82-4d87-8a7a-f9a7f9d3bf29")
 
-local chestInput = sides.bottom
-local chestOutput = sides.top
-local chestTrash = sides.west
-local chestLoot = sides.east
+------ change this! ----------
+local tr = component.proxy("91003801-3b82-4d87-8a7a-f9a7f9d3bf29") -- change this!
+local Settings={
+    ["title"] = "Казино",
+    ["chestInput"] = sides.bottom,
+    ["chestOutput"] = sides.top,
+    ["chestTrash"] = sides.west,
+    ["chestLoot"] = sides.east,   
+}
+--------end --------------
 
---setings menu--
-local SETTINGS_LINE
-
-local FILE_WITH_ODDS = "lootList.json"
-local title = "Казино"
-
-
-MenuPages = {["main"] = {
-    " Запустить Казино! ",
-    " Настройки ",
-    " Выход "
-    }
+local Graphic. = {
+    ["screenWidth"], ["screenHeight"] =  gpu.getResolution(),
+    ["yCenter"] = Graphic.screenHeight / 2,
+    ["xCenter"] = Graphic.screenWidth / 2,
+    ["titleCenter"] = Graphic.xCenter - string.len(Settings.title) / 2), 
+    ["countOfMenuButtons"] = 0 ,
+    ["selectedItem"] = 1,
+    ["settingsLine"] = 1,
+    ["goBack"] = false,
 }
 
+local FileNames = {
+    ["oddList"] = "oddList.json",
+    ["payList"] = "payList.json",
+}
+
+local MenuPages = {
+    ["main"] = {
+        " Запустить Казино! ",
+        " Настройки ",
+        " Выход "
+    }
+}
 
 ----------------------------Графика ------------------------
 --[[ Почистить экран ]]--
 function ClearScreen()
   gpu.setBackground(0x000000)
-  gpu.fill(1, 1, screenWidth, screenHeight, " ")
-  gpu.set(math.floor(xCenter - string.len(title) / 2), 2, title)
+  gpu.fill(1, 1, Graphic.screenWidth, Graphic.screenHeight, " ")
+  gpu.set(Graphic.titleCenter, 2, Settings.title)
 end
 
 
 --[[ Нарисовать текст ]]--
 function WriteText(text, color, background, x, y)
     text =tostring(text)
-    x = x or math.floor(xCenter - string.len(text)/4)
-    y = y or math.floor(yCenter)
+    x = x or math.floor(Graphic.xCenter - string.len(text)/4)
+    y = y or math.floor(Graphic.yCenter)
     color = color or 0xFFFFFF
     background = background or 0x000000
 
     gpu.setBackground(background)
     gpu.setForeground(color)
     gpu.set(x, y, text)
-    writeLine= writeLine+1
 end
 
 function DrawExit(line, x, y) 
-    countOfMenuButtons = countOfMenuButtons+1
-    if line == selectedItem then
+    Graphic.countOfMenuButtons = Graphic.countOfMenuButtons+1
+    if line == Graphic.selectedItem then
         WriteText(" Выход ", 0xFFFFFF, 0x3366CC, x, y)  
     else
         WriteText(" Выход ", 0xFFFFFF, nil, x, y)   
@@ -72,10 +79,10 @@ end
 
 --[[ Слушатель клавишь ]]--
 function HandleKeyEvent(key, func)
-    if key == 200 and selectedItem > 1 then -- стрелка вверх
-      selectedItem = selectedItem - 1
-    elseif key == 208 and selectedItem < countOfMenuButtons then -- стрелка вниз
-      selectedItem = selectedItem + 1
+    if key == 200 and Graphic.selectedItem > 1 then -- стрелка вверх
+      Graphic.selectedItem = Graphic.selectedItem - 1
+    elseif key == 208 and Graphic.selectedItem < Graphic.countOfMenuButtons then -- стрелка вниз
+      Graphic.selectedItem = Graphic.selectedItem + 1
     elseif key == 28 then -- энтер
       func()
     end
@@ -84,11 +91,11 @@ function HandleKeyEvent(key, func)
 --[[ Функция для работы с менюшками ]]--
 function DrawMenu(funcMenu, buttons,  funcHandler)
     ClearScreen()
-    selectedItem= 1
-    STAY_MENU = true
+    Graphic.selectedItem= 1
+    Graphic.goBack = false
 
-    while STAY_MENU do
-        countOfMenuButtons = #buttons
+    while ~Graphic.goBack do
+        Graphic.countOfMenuButtons = #buttons
         funcMenu(buttons)
         local event, _, _, key = computer.pullSignal(0.5)
         if event == "key_down" then
@@ -101,11 +108,11 @@ end
 --[[ Логика Главного меню ]]--
 function MainMenu()
     ClearScreen()
-    if selectedItem == 1 then
+    if Graphic.selectedItem == 1 then
         GameStart()
-    elseif selectedItem == 2 then 
+    elseif Graphic.selectedItem == 2 then 
         DrawMenu(SettingsDraw, LOOT_LIST,  SettingsMenu)
-    elseif selectedItem == 3 then
+    elseif Graphic.selectedItem == 3 then
       os.exit()
     end
 end
@@ -113,10 +120,10 @@ end
 --[[ Нарисовать Главное меню ]]--
 function MainDraw(buttons)
   if buttons == nil or #buttons == 0 then return end
-  local menuItemY = yCenter - #buttons/2
+  local menuItemY = Graphic.yCenter - #buttons/2
 
   for i, _text in ipairs(buttons) do
-    if i == selectedItem then
+    if i == Graphic.selectedItem then
         WriteText(_text, 0xFFFFFF, 0x3366CC, nil, menuItemY)
     else
         WriteText(_text, 0xFFFFFF, nil, nil, menuItemY)
@@ -130,19 +137,19 @@ end
 
 --[[ Нарисовать меню Настроек ]]--
 function SettingsDraw(buttons)
-    SETTINGS_LINE = 1
+    Graphic.settingsLine = 1
     local buttonY = 4
     local _text
 
     for fullName, loot in pairs(CHEST_LOOT_LIST) do -- в сундуке
         if LOOT_LIST[fullName] == nil  and (JSON_LOOT_LIST[fullName] == nil or JSON_LOOT_LIST[fullName].odd == 0) then
-            _text =  " #"..SETTINGS_LINE.. "  " .."...% ".. loot.label.. " -> ".. fullName .." "
+            _text =  " #".. Graphic.settingsLine.. "  " .."...% ".. loot.label.. " -> ".. fullName .." "
 
-            if SETTINGS_LINE == selectedItem then WriteText(_text, 0xFFFFFF, 0x3366CC, 5, buttonY+SETTINGS_LINE)   
-            else WriteText(_text, 0xFFFFFF, nil, 5, buttonY+SETTINGS_LINE) end
+            if  Graphic.settingsLine == Graphic.selectedItem then WriteText(_text, 0xFFFFFF, 0x3366CC, 5, buttonY+ Graphic.settingsLine)   
+            else WriteText(_text, 0xFFFFFF, nil, 5, buttonY+ Graphic.settingsLine) end
             
             LOOT_LIST[fullName] = loot
-            SETTINGS_LINE = SETTINGS_LINE + 1
+             Graphic.settingsLine =  Graphic.settingsLine + 1
         end
     end
 
@@ -152,22 +159,22 @@ function SettingsDraw(buttons)
             if loot.odd == 0 then odd = "..."
             else odd = loot.odd end
 
-            _text =  " #"..SETTINGS_LINE.. "  "..odd .."% ".. loot.label.. " -> ".. fullName .." "
-            if SETTINGS_LINE == selectedItem then WriteText(_text, 0xFFFFFF, 0x3366CC, 5, buttonY+SETTINGS_LINE)   
-            else WriteText(_text, 0xFFFFFF, nil, 5, buttonY+SETTINGS_LINE) end
+            _text =  " #".. Graphic.settingsLine.. "  "..odd .."% ".. loot.label.. " -> ".. fullName .." "
+            if  Graphic.settingsLine == Graphic.selectedItem then WriteText(_text, 0xFFFFFF, 0x3366CC, 5, buttonY+ Graphic.settingsLine)   
+            else WriteText(_text, 0xFFFFFF, nil, 5, buttonY+ Graphic.settingsLine) end
 
             LOOT_LIST[fullName] = loot
-            SETTINGS_LINE = SETTINGS_LINE + 1
+             Graphic.settingsLine =  Graphic.settingsLine + 1
         end
     end
 
-    countOfMenuButtons = SETTINGS_LINE
-    DrawExit(SETTINGS_LINE, 5, buttonY+1)
+    Graphic.countOfMenuButtons =  Graphic.settingsLine
+    DrawExit( Graphic.settingsLine, 5, buttonY+1)
 end
 
 
 function SettingsMenu()
-    if selectedItem == countOfMenuButtons then  
+    if Graphic.selectedItem == Graphic.countOfMenuButtons then  
         MenuBack()  
         return
     else 
@@ -177,7 +184,7 @@ function SettingsMenu()
 end
 
 function SetNewOdd()
-    local _text = TextInput(_text, xCenter-string.len(_text)/2 , screenHeight- 5)
+    local _text = TextInput(_text, Graphic.xCenter-string.len(_text)/2 , screenHeight- 5)
     if _text.tointeger() then
         
     end
@@ -191,9 +198,9 @@ function TextInput(_text, x, y)
 end
 
 function MenuBack()
-    STAY_MENU = false
+    Graphic.goBack = true
     ClearScreen()
-    selectedItem = 1
+    Graphic.selectedItem = 1
 end
 
 
@@ -219,7 +226,7 @@ end
 
 function SaveOdd(fullName, odd)
     JSON_LOOT_LIST[fullName].odd = odd
-    SaveToFile(FILE_WITH_ODDS, JSON_LOOT_LIST)
+    SaveToFile(FileNames.oddList, JSON_LOOT_LIST)
 end
 
 function DeleteFromFile(fileName, array)
@@ -237,10 +244,10 @@ end
 function Check()
     ClearScreen()
     if tr == nil 
-    or tr.getInventoryName(chestInput) == nil
-    or tr.getInventoryName(chestOutput) == nil
-    or tr.getInventoryName(chestTrash) == nil
-    or tr.getInventoryName(chestLoot) == nil
+    or tr.getInventoryName(Settings.chestInput) == nil
+    or tr.getInventoryName(Settings.chestOutput) == nil
+    or tr.getInventoryName(Settings.chestTrash) == nil
+    or tr.getInventoryName(Settings.chestLoot) == nil
     then
         WriteText("Неверно указаны настройки или не хватает сундуков/транспозера!")
         os.exit()
@@ -283,7 +290,7 @@ end
 
 --Обновляет лутлисты
 function UpdateLootList() 
-    local allStacks = tr.getAllStacks(chestLoot).getAll()
+    local allStacks = tr.getAllStacks(Settings.chestLoot).getAll()
     CHEST_LOOT_LIST = {}
 
     for i, item in pairs(allStacks) do
@@ -299,7 +306,7 @@ function UpdateLootList()
             end
         end
     end
-    JSON_LOOT_LIST = LoadFile(FILE_WITH_ODDS)
+    JSON_LOOT_LIST = LoadFile(FileNames.oddList)
 end
 
 function putItemFromTo(fromSide, fromSlot, toSide)
@@ -345,7 +352,7 @@ PayList = {
 function getPayItem()
     WriteText("Положите плату для лотереи в сундук")
     while true do
-        local item = getItemFromChest(chestInput)
+        local item = getItemFromChest(Settings.chestInput)
         if item ~= nil then
             return item
         end
@@ -364,7 +371,7 @@ local function getPay()
             return value
        end           
     end
-    putItemFromTo(chestInput, item.slot, chestOutput)
+    putItemFromTo(Settings.chestInput, item.slot, Settings.chestOutput)
     ClearScreen()
     writeText("Pay item didnt recognize")
     os.sleep(3)
@@ -379,7 +386,7 @@ function GameStart()
     while true do
         local payValue = getPay()
         local randomItem = getRandomLoot(payValue)
-        putItemFromTo(chestLoot, randomItem.slot, chestOutput)
+        putItemFromTo(Settings.chestLoot, randomItem.slot, Settings.chestOutput)
         os.sleep(1)
     end
 end
