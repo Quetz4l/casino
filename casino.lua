@@ -323,7 +323,7 @@ function getRandomLoot(payValue)
         ClearScreen()
         if odd == nil then 
             WriteText(randomItem.label .. " no has odd! Say to owner", 0x880808)
-        else
+        elseif odd ~= 0 then
             odd= odd + payValue
             WriteText(odd .." -> "..randomItem.label)
             if odd > math.random(0,100) then
