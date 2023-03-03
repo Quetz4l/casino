@@ -20,6 +20,11 @@ local Settings={
     ["chestTrash"] = sides.west,
     ["chestLoot"] = sides.east,   
 }
+
+PayList = { -- pay items and odd boost
+    ["coin/1"] = 1,
+    ["coin/2"] = 22,
+}
 --------end --------------
 
 local Graphic. = {
@@ -295,13 +300,13 @@ function UpdateLootList()
 
     for i, item in pairs(allStacks) do
         if item.name ~= nil then
-            local itemName = item.name .. "/" .. item.damage
-            if CHEST_LOOT_LIST[itemName] == nil then
-                CHEST_LOOT_LIST[itemName] = {
+            local fullName = item.name .. "/" .. item.damage
+            if CHEST_LOOT_LIST[fullName] == nil then
+                CHEST_LOOT_LIST[fullName] = {
                     ["slot"] = i+1,
                     ["label"]= item.label,
                     ["count"] = item.size,
-                    print( item.label)
+                    ["odd"] = JSON_LOOT_LIST["fullName"]
                 }
             end
         end
@@ -325,11 +330,11 @@ function getRandomLoot(payValue)
     
     while true do
         local randomItem = lootList[math.random(0,countOfLoots)]
-        local odd = JSON_LOOT_LIST[randomItem.fullName]
+        local odd = randomItem.odd
         
         ClearScreen()
         if odd == nil then 
-            WriteText(randomItem.label .. " no has odd! Say to owner", 0x880808)
+            WriteText(randomItem.label .. " not has odd! Say to owner", 0x880808)
         elseif odd ~= 0 then
             odd= odd + payValue
             WriteText(odd .." -> "..randomItem.label)
@@ -342,12 +347,6 @@ function getRandomLoot(payValue)
         os.sleep(1)
     end
 end
-
-
-PayList = {
-    ["coin.1"] = 1,
-    ["coin.2"] = 20,
-}
 
 function getPayItem()
     WriteText("Положите плату для лотереи в сундук")
