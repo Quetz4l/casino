@@ -14,8 +14,9 @@ local writeLine = 1
 local JSON_LOOT_LIST={}
 local CHEST_LOOT_LIST={}
 local LOOT_LIST = {}
+local MENU_LIST = {}
 local STAY_MENU= true
-local Tick = 20
+local Tick = 200
 local tr = component.proxy("91003801-3b82-4d87-8a7a-f9a7f9d3bf29")
 
 local chestInput = sides.bottom
@@ -32,7 +33,8 @@ local title = "Казино"
 
 MenuPages = {["main"] = {
     " Запустить Казино! ",
-    " Настройки ",
+    " Настройки шансов",
+    " Настройки оплаты",
     " Выход "
     }
 }
@@ -110,7 +112,7 @@ function MainMenu()
     end
 end
 
---[[ Нарисовать Главное меню ]]--
+--[[ Рисовка Главного меню ]]--
 function MainDraw(buttons)
   if buttons == nil or #buttons == 0 then return end
   local menuItemY = yCenter - #buttons/2
@@ -125,61 +127,77 @@ function MainDraw(buttons)
   end
 end
 
-
-
-
---[[ Нарисовать меню Настроек ]]--
-function SettingsDraw(buttons)
-    SETTINGS_LINE = 1
-    local buttonY = 4
-    local _text
-
-    for fullName, loot in pairs(CHEST_LOOT_LIST) do -- в сундуке
-        if LOOT_LIST[fullName] == nil  and (JSON_LOOT_LIST[fullName] == nil or JSON_LOOT_LIST[fullName].odd == 0) then
-            _text =  " #"..SETTINGS_LINE.. "  " .."...% ".. loot.label.. " -> ".. fullName .." "
-
-            if SETTINGS_LINE == selectedItem then WriteText(_text, 0xFFFFFF, 0x3366CC, 5, buttonY+SETTINGS_LINE)   
-            else WriteText(_text, 0xFFFFFF, nil, 5, buttonY+SETTINGS_LINE) end
-            
-            LOOT_LIST[fullName] = loot
-            SETTINGS_LINE = SETTINGS_LINE + 1
-        end
-    end
-
-    for fullName, loot in pairs(JSON_LOOT_LIST) do -- В файле
-        if LOOT_LIST[fullName] == nil then
-            local odd
-            if loot.odd == 0 then odd = "..."
-            else odd = loot.odd end
-
-            _text =  " #"..SETTINGS_LINE.. "  "..odd .."% ".. loot.label.. " -> ".. fullName .." "
-            if SETTINGS_LINE == selectedItem then WriteText(_text, 0xFFFFFF, 0x3366CC, 5, buttonY+SETTINGS_LINE)   
-            else WriteText(_text, 0xFFFFFF, nil, 5, buttonY+SETTINGS_LINE) end
-
-            LOOT_LIST[fullName] = loot
-            SETTINGS_LINE = SETTINGS_LINE + 1
-        end
-    end
-
-    countOfMenuButtons = SETTINGS_LINE
-    DrawExit(SETTINGS_LINE, 5, buttonY+1)
-end
-
-
+--[[ Логика меню Настроек ]]--
 function SettingsMenu()
     if selectedItem == countOfMenuButtons then  
         MenuBack()  
         return
     else 
-        local _text = "Новый шанс: "
         SetNewOdd()
     end
 end
 
-function SetNewOdd()
-    local _text = TextInput(_text, xCenter-string.len(_text)/2 , screenHeight- 5)
-    if _text.tointeger() then
-        
+--[[ Рисовка меню Настроек ]]--
+function SettingsDraw(buttons)
+    ClearScreen()
+    SETTINGS_LINE = 1
+    local buttonY = 4
+    local _text
+    Tick = Tick+1
+
+    for fullName, loot in pairs(CHEST_LOOT_LIST) do -- в сундуке
+        if JSON_LOOT_LIST[fullName] == nil or JSON_LOOT_LIST[fullName].odd == 0 then
+            _text =  " #"..SETTINGS_LINE.. "  " .."...% ".. loot.label.. " -> ".. fullName .." "
+
+            if SETTINGS_LINE == selectedItem then 
+                WriteText(_text, 0xFFFFFF, 0x3366CC, 5, buttonY+SETTINGS_LINE)
+            else 
+                WriteText(_text, 0xFFFFFF, nil, 5, buttonY+SETTINGS_LINE) end
+            LOOT_LIST[fullName] = loot
+            SETTINGS_LINE = SETTINGS_LINE + 1
+            table.insert(MENU_LIST, fullName)
+        end
+    end
+
+    for fullName, loot in pairs(JSON_LOOT_LIST) do -- В файле
+        local odd
+        if loot.odd == 0 then odd = "..."
+        else odd = loot.odd end
+
+        _text =  " #"..SETTINGS_LINE.. "  "..odd .."% ".. loot.label.. " -> ".. fullName .." "
+        if SETTINGS_LINE == selectedItem then 
+            WriteText(_text, 0xFFFFFF, 0x3366CC, 5, buttonY+SETTINGS_LINE)
+        else 
+            WriteText(_text, 0xFFFFFF, nil, 5, buttonY+SETTINGS_LINE) end
+
+        LOOT_LIST[fullName] = loot
+        SETTINGS_LINE = SETTINGS_LINE + 1
+        table.insert(MENU_LIST, fullName)
+    end
+
+    countOfMenuButtons = SETTINGS_LINE -1
+    DrawExit(SETTINGS_LINE, 5, buttonY+SETTINGS_LINE+1)
+
+    if Tick >= 200 then
+        Tick = 0
+        UpdateLootList()
+    end
+end
+
+function SetNewOdd(show_text)
+    show_text = "Новый шанс: "
+    local new_odd = tonumber(TextInput(show_text, xCenter- string.len(show_text)/2 , screenHeight- 5))
+
+    if new_odd ~= nil and new_odd<100 and new_odd>=0 then
+        local item_index = MENU_LIST[selectedItem]
+        if JSON_LOOT_LIST[item_index] == nil then
+            JSON_LOOT_LIST[item_index] = {
+                ["label"] = CHEST_LOOT_LIST[item_index]["label"]
+            }
+        end
+
+        JSON_LOOT_LIST[item_index]["odd"] = new_odd
+        SaveToFile(FILE_WITH_ODDS, JSON_LOOT_LIST)
     end
     ClearScreen()
 end
@@ -197,7 +215,7 @@ function MenuBack()
 end
 
 
-----------------------------Работа с файлом --------------------------
+----------------------------Работа с файлами --------------------------
 
 function SaveToFile(fileName, array)
     local data = serialization.serialize(JSON_LOOT_LIST)
@@ -215,11 +233,6 @@ function LoadFile(fileName)
     f:close()
 
     return _data
-end
-
-function SaveOdd(fullName, odd)
-    JSON_LOOT_LIST[fullName].odd = odd
-    SaveToFile(FILE_WITH_ODDS, JSON_LOOT_LIST)
 end
 
 function DeleteFromFile(fileName, array)
@@ -267,7 +280,7 @@ function SetPay()
 end
 
 --[[ Сундуки и выбор лута]]--
-function getSlotWithItem(side) 
+function getSlotWithItem(side, slot) 
     if slot == nil then
         local all_items = tr.getAllStacks(side).getAll()
         for i, item in pairs(all_items) do
@@ -282,7 +295,7 @@ end
 
 function getItemFromChest(side, slot) 
     if slot == nil then
-        slot = getSlotWithItem(side)
+        slot = getSlotWithItem(side, slot)
     end
     if slot == 0 then return end 
     local item =  tr.getStackInSlot(side, slot)
@@ -310,15 +323,14 @@ function UpdateLootList()
                     ["slot"] = i+1,
                     ["label"]= item.label,
                     ["count"] = item.size,
-                    print( item.label)
-                }
+                }                
             end
         end
     end
     JSON_LOOT_LIST = LoadFile(FILE_WITH_ODDS)
 end
 
-function putItemFromTo(fromSide, fromSlot, toSide)
+local function putItemFromTo(fromSide, fromSlot, toSide)
     tr.transferItem(fromSide, fromSlot, toSide)
 end
 
@@ -326,7 +338,7 @@ end
 
 function getRandomLoot()
     if countOfLoots == 0 then return end  -------todo вернуть оплату
-    i = 0
+    local i = 0
     while true do
         randomItem = math.random(0,countOfLoots)
         for item, odd in pairs(odds) do
@@ -353,14 +365,13 @@ end
 --[[ Логика игры]]--
 function GameStart()
     Check()
-    UpdateLootList()
 
     while true do
         --local item = getItemFromChest(chestInput)
         if item == nil then return end
         if item.fullName ~= inputItem then 
             putItemFromTo(chestInput, item.slot, chestOutput)
-            print("Неверная оплата") 
+            WriteText("Неверная оплата") 
         end
 
         getRandomLoot()
@@ -370,11 +381,5 @@ end
 
 --[[ Главное меню ]]--
 while true do
-    if Tick % 20 == 0 then
-        UpdateLootList()
-        term.write('asd')
-        os.sleep(1)
-    end
-    Tick = Tick+1
     DrawMenu(MainDraw, MenuPages["main"],  MainMenu)
 end
